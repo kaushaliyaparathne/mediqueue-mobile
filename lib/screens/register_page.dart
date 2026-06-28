@@ -15,7 +15,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final phoneController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
-  final addressController = TextEditingController(); // ✅ NEW
+  final addressController = TextEditingController();
 
   final AuthService authService = AuthService();
 
@@ -23,8 +23,8 @@ class _RegisterPageState extends State<RegisterPage> {
   bool isConfirmHidden = true;
   bool isLoading = false;
 
-  DateTime? selectedDOB; // ✅ NEW
-  String? selectedGender; // ✅ NEW
+  DateTime? selectedDOB;
+  String? selectedGender;
 
   final List<String> genders = ["Male", "Female", "Other"];
 
@@ -90,11 +90,12 @@ class _RegisterPageState extends State<RegisterPage> {
         email: email,
         phone: phone,
         password: password,
-        dob: selectedDOB.toString(),
+        dob: selectedDOB!.toIso8601String(), // Better format for backend
         gender: selectedGender!,
         address: address,
       );
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Registration Successful")),
       );
@@ -104,12 +105,13 @@ class _RegisterPageState extends State<RegisterPage> {
         MaterialPageRoute(builder: (_) => const LoginPage()),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Registration failed: $e")),
       );
     }
 
-    setState(() => isLoading = false);
+    if (mounted) setState(() => isLoading = false);
   }
 
   Widget buildField({
@@ -118,12 +120,14 @@ class _RegisterPageState extends State<RegisterPage> {
     required TextEditingController controller,
     bool obscure = false,
     Widget? suffix,
+    TextInputType? keyboardType,
   }) {
     return SizedBox(
       height: 45,
       child: TextField(
         controller: controller,
         obscureText: obscure,
+        keyboardType: keyboardType,
         style: const TextStyle(color: Colors.white, fontSize: 14),
         decoration: InputDecoration(
           hintText: hint,
@@ -167,7 +171,6 @@ class _RegisterPageState extends State<RegisterPage> {
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
                   colors: [Colors.teal, Colors.white],
-                  
                 ),
               ),
               child: ClipOval(
@@ -237,6 +240,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         hint: "Email",
                         icon: Icons.email,
                         controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
                       ),
 
                       const SizedBox(height: 15),
@@ -245,36 +249,42 @@ class _RegisterPageState extends State<RegisterPage> {
                         hint: "Phone Number",
                         icon: Icons.phone,
                         controller: phoneController,
+                        keyboardType: TextInputType.phone,
                       ),
 
                       const SizedBox(height: 15),
 
                       /// DOB
-                      Container(
-                        height: 45,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.cake, color: Colors.white),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                selectedDOB == null
-                                    ? "Date of Birth"
-                                    : "${selectedDOB!.year}-${selectedDOB!.month}-${selectedDOB!.day}",
-                                style: const TextStyle(color: Colors.white70),
+                      GestureDetector(
+                        onTap: pickDOB,
+                        child: Container(
+                          height: 45,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.cake, color: Colors.white, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  selectedDOB == null
+                                      ? "Date of Birth"
+                                      : "${selectedDOB!.day}/${selectedDOB!.month}/${selectedDOB!.year}",
+                                  style: TextStyle(
+                                    color: selectedDOB == null 
+                                        ? Colors.white70 
+                                        : Colors.white,
+                                    fontSize: 13,
+                                  ),
+                                ),
                               ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.calendar_today,
-                                  color: Colors.white),
-                              onPressed: pickDOB,
-                            )
-                          ],
+                              const Icon(Icons.calendar_today,
+                                  color: Colors.white, size: 20),
+                            ],
+                          ),
                         ),
                       ),
 
@@ -290,11 +300,19 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            dropdownColor: Colors.black,
+                            isExpanded: true,
+                            dropdownColor: const Color(0xFF063C3D),
+                            icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
                             value: selectedGender,
-                            hint: const Text(
-                              "Gender",
-                              style: TextStyle(color: Colors.white70),
+                            hint: const Row(
+                              children: [
+                                Icon(Icons.wc, color: Colors.white, size: 20),
+                                SizedBox(width: 10),
+                                Text(
+                                  "Gender",
+                                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                                ),
+                              ],
                             ),
                             items: genders
                                 .map(
@@ -302,8 +320,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                     value: e,
                                     child: Text(
                                       e,
-                                      style:
-                                          const TextStyle(color: Colors.white),
+                                      style: const TextStyle(color: Colors.white),
                                     ),
                                   ),
                                 )
@@ -370,14 +387,61 @@ class _RegisterPageState extends State<RegisterPage> {
                           onPressed: isLoading ? null : register,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.tealAccent,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           child: isLoading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.black,
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.black,
+                                    strokeWidth: 2,
+                                  ),
                                 )
-                              : const Text("REGISTER"),
+                              : const Text(
+                                  "REGISTER",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
                         ),
                       ),
+
+                      const SizedBox(height: 15),
+
+                      /// ALREADY HAVE ACCOUNT - NEW SECTION
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            "Already have an account? ",
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const LoginPage(),
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              "Login",
+                              style: TextStyle(
+                                color: Colors.tealAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 30),
                     ],
                   ),
                 ),
