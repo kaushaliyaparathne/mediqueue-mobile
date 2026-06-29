@@ -167,8 +167,7 @@ class _AlertsPageState extends State<AlertsPage> {
                 margin: const EdgeInsets.only(bottom: 15),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(20),
+                 borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: getColor(status).withOpacity(0.5),
                   ),
