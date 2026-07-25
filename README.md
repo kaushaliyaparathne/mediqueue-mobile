@@ -7,7 +7,6 @@ MediQueue is a smart clinic appointment and queue management mobile application 
 The system allows patients to book appointments online, view their appointments, receive queue updates, and manage their profiles through a mobile application.
 
 This mobile application was developed using **Flutter** with **Firebase backend services**.
-
 ---
 
 # 🚀 Features
@@ -80,29 +79,23 @@ MediQueue follows a client-server architecture.
 
 # 📱 Screenshots
 
-## Splash Screen
 
-![Splash Screen](screenshots/splash.png)
-
-## Login Page
-
-![Login](screenshots/login.jpeg)
 
 ## Home Page
 
-![Home](screenshots/home.png)
+![Home](lib/screenshorts/home.jpeg)
 
 ## Book Appointment
 
-![Book Appointment](screenshots/book_appointment.png)
+![Book Appointment](lib/screenshorts/book_appointmnet.jpeg)
 
-## My Appointments
+## Queue Status
+![Queue Status](lib/screenshorts/queue_status.jpeg)
 
-![Appointments](screenshots/appointments.png)
 
-## Profile
 
-![Profile](screenshots/profile.png)
+
+
 
 ---
 
