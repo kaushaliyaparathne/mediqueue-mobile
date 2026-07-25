@@ -31,7 +31,7 @@ class _QueueStatusPageState extends State<QueueStatusPage> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.orangeAccent.withOpacity(0.2),
+                color: Colors.orangeAccent.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.notifications_active, color: Colors.orangeAccent, size: 28),
@@ -222,7 +222,7 @@ class _QueueStatusPageState extends State<QueueStatusPage> {
                             boxShadow: isSelected
                                 ? [
                                     BoxShadow(
-                                      color: Colors.tealAccent.withOpacity(0.3),
+                                      color: Colors.tealAccent.withValues(alpha: 0.3),
                                       blurRadius: 8,
                                       spreadRadius: 1,
                                     )
@@ -428,7 +428,7 @@ try {
                             final minutes = estimatedWaitMinutes % 60;
                             String waitTimeText = "";
                             if (hours > 0) {
-                              waitTimeText = "$hours hr ${minutes} min";
+                              waitTimeText = "$hours hr $minutes min";
                             } else {
                               waitTimeText = "$minutes min";
                             }
@@ -451,7 +451,7 @@ if (!isAppointmentToday) {
       margin: const EdgeInsets.all(20),
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.tealAccent),
       ),
@@ -502,7 +502,62 @@ if (!isAppointmentToday) {
     ),
   );
 }
-                            return SingleChildScrollView(
+
+                            return StreamBuilder<DocumentSnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection("queue_status")
+                                  .doc(selectedService!.trim())
+                                  .snapshots(),
+                              builder: (context, queueStatusSnapshot) {
+                                final queueStatusData = queueStatusSnapshot.data
+                                    ?.data() as Map<String, dynamic>?;
+                                final currentServing =
+                                    (queueStatusData?["currentServing"] ?? 0) as num;
+
+                                if (currentServing <= 0) {
+                                  return Center(
+                                    child: Container(
+                                      margin: const EdgeInsets.all(20),
+                                      padding: const EdgeInsets.all(25),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.05),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: Colors.orangeAccent),
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.hourglass_empty,
+                                            color: Colors.orangeAccent,
+                                            size: 70,
+                                          ),
+                                          const SizedBox(height: 20),
+                                          const Text(
+                                            "Queue Not Started Yet",
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            "The staff hasn't started the queue for $selectedService yet. Please check back soon.",
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 15,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                return SingleChildScrollView(
                               padding: const EdgeInsets.all(16),
                               child: Column(
                                 children: [
@@ -511,9 +566,9 @@ if (!isAppointmentToday) {
                                     width: double.infinity,
                                     padding: const EdgeInsets.all(20),
                                     decoration: BoxDecoration(
-                                      color: Colors.orange.withOpacity(0.15),
+                                      color: Colors.orange.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.orangeAccent.withOpacity(0.5), width: 2),
+                                      border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.5), width: 2),
                                     ),
                                     child: Column(
                                       children: [
@@ -582,7 +637,7 @@ if (!isAppointmentToday) {
                                       borderRadius: BorderRadius.circular(20),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.tealAccent.withOpacity(0.3),
+                                          color: Colors.tealAccent.withValues(alpha: 0.3),
                                           blurRadius: 15,
                                           spreadRadius: 2,
                                         )
@@ -621,9 +676,9 @@ if (!isAppointmentToday) {
                                     width: double.infinity,
                                     padding: const EdgeInsets.all(20),
                                     decoration: BoxDecoration(
-                                      color: Colors.blue.withOpacity(0.15),
+                                      color: Colors.blue.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
+                                      border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5)),
                                     ),
                                     child: Row(
                                       children: [
@@ -660,7 +715,7 @@ if (!isAppointmentToday) {
                                     width: double.infinity,
                                     padding: const EdgeInsets.all(20),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.05),
+                                      color: Colors.white.withValues(alpha: 0.05),
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(color: Colors.white24),
                                     ),
@@ -708,7 +763,7 @@ if (!isAppointmentToday) {
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                               decoration: BoxDecoration(
-                                                color: statusColor.withOpacity(0.2),
+                                                color: statusColor.withValues(alpha: 0.2),
                                                 borderRadius: BorderRadius.circular(12),
                                                 border: Border.all(color: statusColor),
                                               ),
@@ -733,9 +788,9 @@ if (!isAppointmentToday) {
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Colors.teal.withOpacity(0.1),
+                                      color: Colors.teal.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.teal.withOpacity(0.3)),
+                                      border: Border.all(color: Colors.teal.withValues(alpha: 0.3)),
                                     ),
                                     child: Row(
                                       children: [
@@ -752,6 +807,8 @@ if (!isAppointmentToday) {
                                   ),
                                 ],
                               ),
+                            );
+                              },
                             );
                           },
                         );

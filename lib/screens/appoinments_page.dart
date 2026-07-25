@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage({super.key});
@@ -52,11 +53,85 @@ class AppointmentsPageState extends State<AppointmentsPage> {
     }
   }
 
-  Future<void> rescheduleAppointment(String docId, String doctorName) async {
+  bool _isDoctorAvailableOnDate(
+    DateTime date,
+    List<String> workingDays,
+    List<String> blockedDates,
+    String schedule,
+  ) {
+    String dayName = DateFormat('EEEE').format(date);
+    if (workingDays.isNotEmpty && !workingDays.contains(dayName)) return false;
+
+    String dateStr = DateFormat('yyyy-MM-dd').format(date);
+    if (blockedDates.contains(dateStr)) return false;
+
+    if (workingDays.isEmpty) {
+      String day = dayName.toLowerCase();
+      String sch = schedule.toLowerCase();
+      if (sch == "everyday") return true;
+      if (sch == "weekdays") return date.weekday >= 1 && date.weekday <= 5;
+      if (sch == "weekends") return date.weekday == 6 || date.weekday == 7;
+      return sch == day;
+    }
+
+    return true;
+  }
+
+  bool _isDoctorAvailableAtTime(TimeOfDay time, Map<String, dynamic> timeSlots) {
+    String timeStr =
+        "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+    String start = timeSlots["start"] ?? "09:00";
+    String end = timeSlots["end"] ?? "17:00";
+    return timeStr.compareTo(start) >= 0 && timeStr.compareTo(end) <= 0;
+  }
+
+  Future<void> rescheduleAppointment(
+    String docId,
+    String doctorId,
+    String doctorName,
+  ) async {
+    if (doctorId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Doctor information missing, cannot reschedule")),
+        );
+      }
+      return;
+    }
+
+    final doctorDoc = await _firestore.collection("doctors").doc(doctorId).get();
+    if (!doctorDoc.exists) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Doctor not found")),
+        );
+      }
+      return;
+    }
+
+    final doctorData = doctorDoc.data() as Map<String, dynamic>;
+    final workingDays = List<String>.from(doctorData["workingDays"] ?? []);
+    final timeSlots = Map<String, dynamic>.from(
+        doctorData["timeSlots"] ?? {"start": "09:00", "end": "17:00"});
+    final blockedDates = List<String>.from(doctorData["blockedDates"] ?? []);
+    final status = doctorData["status"]?.toString() ?? "Available";
+    final schedule = doctorData["schedule"]?.toString() ?? "everyday";
+
+    if (status != "Available") {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Doctor is currently unavailable")),
+        );
+      }
+      return;
+    }
+
     DateTime? newDate = await showDatePicker(
       context: context,
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
+      selectableDayPredicate: (date) =>
+          _isDoctorAvailableOnDate(date, workingDays, blockedDates, schedule),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -73,6 +148,7 @@ class AppointmentsPageState extends State<AppointmentsPage> {
     );
 
     if (newDate == null) return;
+    if (!mounted) return;
 
     TimeOfDay? newTime = await showTimePicker(
       context: context,
@@ -94,9 +170,44 @@ class AppointmentsPageState extends State<AppointmentsPage> {
 
     if (newTime == null) return;
 
+    if (!_isDoctorAvailableAtTime(newTime, timeSlots)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Doctor only available ${timeSlots['start']} - ${timeSlots['end']}",
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    final formattedDate = formatDate(newDate);
+    final formattedTime = newTime.format(context);
+
+    final conflictSnapshot = await _firestore
+        .collection("appointments")
+        .where("doctorId", isEqualTo: doctorId)
+        .where("date", isEqualTo: formattedDate)
+        .where("time", isEqualTo: formattedTime)
+        .where("status", whereIn: ["Pending", "Approved", "Confirmed", "In Progress"])
+        .get();
+
+    final hasConflict = conflictSnapshot.docs.any((d) => d.id != docId);
+    if (hasConflict) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("This time slot is already booked")),
+        );
+      }
+      return;
+    }
+
     await _firestore.collection("appointments").doc(docId).update({
-      "date": formatDate(newDate),
-      "time": newTime.format(context),
+      "date": formattedDate,
+      "time": formattedTime,
       "status": "Pending",
     });
 
@@ -302,7 +413,11 @@ class AppointmentsPageState extends State<AppointmentsPage> {
           );
         } else {
           // Swipe left - Reschedule
-          rescheduleAppointment(doc.id, data["doctorName"] ?? "");
+          rescheduleAppointment(
+            doc.id,
+            data["doctorId"] ?? "",
+            data["doctorName"] ?? "",
+          );
           return false;
         }
       },
@@ -410,7 +525,11 @@ class AppointmentsPageState extends State<AppointmentsPage> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: () => rescheduleAppointment(doc.id, data["doctorName"] ?? ""),
+                              onPressed: () => rescheduleAppointment(
+                                doc.id,
+                                data["doctorId"] ?? "",
+                                data["doctorName"] ?? "",
+                              ),
                               icon: const Icon(Icons.edit_calendar, size: 18),
                               label: const Text("Reschedule"),
                               style: ElevatedButton.styleFrom(

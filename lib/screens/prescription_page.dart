@@ -16,46 +16,12 @@ class PrescriptionPage extends StatefulWidget {
 
 class _PrescriptionPageState extends State<PrescriptionPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  String? selectedService; // null = All services
-  List<String> serviceList = ['All'];
   bool _needsClientSorting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadServices();
-  }
-
-  // Load unique service names for dropdown
-  Future<void> _loadServices() async {
-    try {
-      final snapshot = await _firestore
-          .collection("prescriptions")
-          .where("patientId", isEqualTo: widget.patientId)
-          .get();
-
-      final services = snapshot.docs
-          .map((doc) => doc.data()["serviceName"]?.toString() ?? "General")
-          .toSet()
-          .toList();
-
-      setState(() {
-        serviceList = ['All', ...services];
-      });
-    } catch (e) {
-      debugPrint("Error loading services: $e");
-    }
-  }
 
   Query<Map<String, dynamic>> _getQuery() {
     Query<Map<String, dynamic>> query = _firestore
         .collection("prescriptions")
         .where("patientId", isEqualTo: widget.patientId);
-
-    // Filter by service if selected
-    if (selectedService != null && selectedService != 'All') {
-      query = query.where("serviceName", isEqualTo: selectedService);
-    }
 
     // Try server-side sorting. If index missing, we'll catch error and sort client-side
     if (!_needsClientSorting) {
@@ -71,265 +37,213 @@ class _PrescriptionPageState extends State<PrescriptionPage> {
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
-        backgroundColor: const Color(0xFF0A2F2F),
+        backgroundColor: const Color(0xFF063C3D),
         title: const Text(
           "My Prescriptions",
           style: TextStyle(
+            color: Colors.white,
             fontWeight: FontWeight.bold,
             letterSpacing: 1,
           ),
         ),
       ),
-      body: Column(
-        children: [
-          // Service filter dropdown
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: const Color(0xFF0A2F2F),
-            child: Row(
-              children: [
-                const Icon(Icons.filter_list, color: Colors.tealAccent),
-                const SizedBox(width: 10),
-                const Text(
-                  "Service:",
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButton<String>(
-                    value: selectedService ?? 'All',
-                    dropdownColor: const Color(0xFF0D4D4D),
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    items: serviceList.map((service) {
-                      return DropdownMenuItem(
-                        value: service,
-                        child: Text(service),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedService = value;
-                        _needsClientSorting = false; // Reset and try server sort again
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _getQuery().snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            final isIndexError = snapshot.error.toString().contains('failed-precondition') ||
+                snapshot.error.toString().contains('requires an index');
 
-          // Prescription list
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _getQuery().snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  // If index error, switch to client-side sorting
-                  if (snapshot.error.toString().contains('failed-precondition') ||
-                      snapshot.error.toString().contains('requires an index')) {
-                    if (!_needsClientSorting) {
-                      // Trigger rebuild with client sorting
-                      Future.microtask(() {
-                        setState(() {
-                          _needsClientSorting = true;
-                        });
-                      });
-                      return const Center(
-                        child: CircularProgressIndicator(color: Colors.tealAccent),
-                      );
-                    }
-                  }
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.error_outline, color: Colors.orange, size: 60),
-                          const SizedBox(height: 16),
-                          Text(
-                            "Firestore index building...\nTry again in 2 minutes.",
-                            style: const TextStyle(color: Colors.white, fontSize: 16),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "${snapshot.error}",
-                            style: const TextStyle(color: Colors.white54, fontSize: 12),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Colors.tealAccent),
-                  );
-                }
-
-                var docs = snapshot.data?.docs ?? [];
-
-                // Client-side sort if server sort failed due to missing index
-                if (_needsClientSorting) {
-                  docs.sort((a, b) {
-                    final aData = a.data() as Map<String, dynamic>;
-                    final bData = b.data() as Map<String, dynamic>;
-                    final aDate = aData["appointmentDate"];
-                    final bDate = bData["appointmentDate"];
-                    
-                    if (aDate is Timestamp && bDate is Timestamp) {
-                      return bDate.compareTo(aDate); // Descending
-                    }
-                    return 0;
+            // Index still building: silently fall back to client-side sorting
+            if (isIndexError) {
+              if (!_needsClientSorting) {
+                Future.microtask(() {
+                  setState(() {
+                    _needsClientSorting = true;
                   });
-                }
+                });
+              }
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF00D9A3)),
+              );
+            }
 
-                if (docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.medical_services_outlined,
-                          size: 80,
-                          color: Colors.white38,
-                        ),
-                        const SizedBox(height: 15),
-                        Text(
-                          selectedService == null || selectedService == 'All'
-                              ? "No Prescriptions Found"
-                              : "No Prescriptions for $selectedService",
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 18,
-                          ),
-                        ),
-                      ],
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  "Something went wrong. Please try again later.",
+                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF00D9A3)),
+            );
+          }
+
+          var docs = snapshot.data?.docs ?? [];
+
+          // Client-side sort if server sort failed due to missing index
+          if (_needsClientSorting) {
+            docs.sort((a, b) {
+              final aData = a.data() as Map<String, dynamic>;
+              final bData = b.data() as Map<String, dynamic>;
+              final aDate = aData["appointmentDate"];
+              final bDate = bData["appointmentDate"];
+
+              if (aDate is Timestamp && bDate is Timestamp) {
+                return bDate.compareTo(aDate); // Descending
+              }
+              return 0;
+            });
+          }
+
+          if (docs.isEmpty) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.medical_services_outlined,
+                    size: 80,
+                    color: Colors.white38,
+                  ),
+                  SizedBox(height: 15),
+                  Text(
+                    "No Prescriptions Found",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 18,
                     ),
-                  );
-                }
+                  ),
+                ],
+              ),
+            );
+          }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final data = docs[index].data() as Map<String, dynamic>;
-                    return _buildCard(context, data);
-                  },
-                );
-              },
-            ),
-          ),
-        ],
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+              return _buildCard(context, data);
+            },
+          );
+        },
       ),
     );
   }
 
   Widget _buildCard(BuildContext context, Map<String, dynamic> data) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 15),
-      color: const Color(0xFF0D4D4D),
-      elevation: 8,
-      shape: RoundedRectangleBorder(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF00D9A3).withValues(alpha: 0.3)),
       ),
-      child: InkWell(
+      child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PrescriptionDetailPage(data: data),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.tealAccent.withOpacity(0.15),
-                  shape: BoxShape.circle,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PrescriptionDetailPage(data: data),
                 ),
-                child: const Icon(
-                  Icons.medical_services,
-                  color: Colors.tealAccent,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            data["doctorName"] ?? "Doctor",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 17,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.tealAccent.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            data["serviceName"] ?? "General",
-                            style: const TextStyle(
-                              color: Colors.tealAccent,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D9A3).withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      data["diagnosis"] ?? "-",
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white70),
+                    child: const Icon(
+                      Icons.medical_services,
+                      color: Color(0xFF00D9A3),
+                      size: 28,
                     ),
-                    const SizedBox(height: 6),
-                    Row(
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.calendar_today,
-                          color: Colors.tealAccent,
-                          size: 14,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                data["doctorName"] ?? "Doctor",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF00D9A3).withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                data["serviceName"] ?? "General",
+                                style: const TextStyle(
+                                  color: Color(0xFF00D9A3),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 5),
+                        const SizedBox(height: 6),
                         Text(
-                          _formatDate(data["appointmentDate"]),
-                          style: const TextStyle(color: Colors.white60),
+                          data["diagnosis"] ?? "-",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.calendar_today,
+                              color: Color(0xFF00D9A3),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              _formatDate(data["appointmentDate"]),
+                              style: const TextStyle(color: Colors.white60),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.white70,
+                    size: 16,
+                  ),
+                ],
               ),
-              const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.white70,
-                size: 16,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -360,8 +274,13 @@ class PrescriptionDetailPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF063C3D),
       appBar: AppBar(
-        title: const Text("Prescription Details"),
-        backgroundColor: const Color(0xFF0A2F2F),
+        elevation: 0,
+        title: const Text(
+          "Prescription Details",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFF063C3D),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -369,7 +288,7 @@ class PrescriptionDetailPage extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 45,
-              backgroundColor: Colors.tealAccent,
+              backgroundColor: const Color(0xFF00D9A3),
               child: Text(
                 patientName.isNotEmpty ? patientName[0].toUpperCase() : "P",
                 style: const TextStyle(
@@ -454,20 +373,21 @@ class PrescriptionDetailPage extends StatelessWidget {
     return Column(
       children: (meds).map<Widget>((m) {
         final med = m as Map<String, dynamic>;
-        return Card(
+        return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          color: const Color(0xFF0D4D4D),
-          shape: RoundedRectangleBorder(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFF00D9A3).withValues(alpha: 0.3)),
           ),
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: Colors.tealAccent.withOpacity(0.15),
+                backgroundColor: const Color(0xFF00D9A3).withValues(alpha: 0.15),
                 child: const Icon(
                   Icons.medication,
-                  color: Colors.tealAccent,
+                  color: Color(0xFF00D9A3),
                 ),
               ),
               title: Text(
@@ -484,14 +404,14 @@ class PrescriptionDetailPage extends StatelessWidget {
                   runSpacing: 8,
                   children: [
                     Chip(
-                      backgroundColor: Colors.teal.withOpacity(0.2),
+                      backgroundColor: const Color(0xFF00D9A3).withValues(alpha: 0.2),
                       label: Text(
                         "Dosage: ${med["dosage"] ?? "-"}",
                         style: const TextStyle(color: Colors.white70),
                       ),
                     ),
                     Chip(
-                      backgroundColor: Colors.teal.withOpacity(0.2),
+                      backgroundColor: const Color(0xFF00D9A3).withValues(alpha: 0.2),
                       label: Text(
                         "Duration: ${med["duration"] ?? "-"}",
                         style: const TextStyle(color: Colors.white70),
@@ -520,16 +440,9 @@ class PrescriptionDetailPage extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.12),
-            Colors.white.withOpacity(0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white24),
+        border: Border.all(color: const Color(0xFF00D9A3).withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -537,7 +450,7 @@ class PrescriptionDetailPage extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              color: Colors.tealAccent,
+              color: Color(0xFF00D9A3),
               fontWeight: FontWeight.bold,
               fontSize: 17,
             ),

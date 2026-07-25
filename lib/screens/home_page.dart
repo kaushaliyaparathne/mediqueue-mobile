@@ -9,7 +9,7 @@ import 'package:mediqueue/screens/profile_page.dart';
 import 'package:mediqueue/screens/queuestatus_page.dart';
 
 class HomePage extends StatefulWidget {
-  final String patientId; // ✅ ADD THIS
+  final String patientId;
 
   const HomePage({super.key, required this.patientId});
 
@@ -30,10 +30,7 @@ class _HomePageState extends State<HomePage> {
       const HomeUI(),
       const AppointmentsPage(),
       const BookAppointmentPage(),
-
-      // ✅ FIXED HERE
       PrescriptionPage(patientId: widget.patientId),
-
       const ProfilePage(),
     ];
   }
@@ -172,12 +169,22 @@ class HomeUI extends StatelessWidget {
                       height: 180,
                       child: StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance
-                            .collection("doctors")
-                            .snapshots(),
+                          .collection("doctors")
+                          .snapshots(),
                         builder: (context, snapshot) {
-                          if (!snapshot.hasData) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
                             return const Center(
-                              child: CircularProgressIndicator(),
+                              child: CircularProgressIndicator(color: Colors.tealAccent),
+                            );
+                          }
+                          if (snapshot.hasError) {
+                            return const Center(
+                              child: Text("Error loading doctors", style: TextStyle(color: Colors.white70)),
+                            );
+                          }
+                          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                            return const Center(
+                              child: Text("No doctors available", style: TextStyle(color: Colors.white70)),
                             );
                           }
 
@@ -187,13 +194,12 @@ class HomeUI extends StatelessWidget {
                             scrollDirection: Axis.horizontal,
                             itemCount: doctors.length,
                             itemBuilder: (context, index) {
-                              final doc = doctors[index].data()
-                                  as Map<String, dynamic>;
+                              final doc = doctors[index].data() as Map<String, dynamic>;
 
                               return doctorCard(
-                                doc['name'] ?? 'No Name',
-                                doc['serviceName'] ?? 'Doctor',
-                                doc['imageUrl'] ?? '',
+                                doc['name']?? 'No Name',
+                                doc['serviceName']?? 'Doctor',
+                                doc['imageUrl']?? '',
                               );
                             },
                           );
@@ -214,14 +220,23 @@ class HomeUI extends StatelessWidget {
 
                     const SizedBox(height: 15),
 
+                    /// SERVICES - SHOW TYPE + DESCRIPTION ONLY
                     StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection("services")
-                          .snapshots(),
+                      stream: FirebaseFirestore.instance.collection("services").snapshots(),
                       builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Center(
-                            child: CircularProgressIndicator(),
+                            child: CircularProgressIndicator(color: Colors.tealAccent),
+                          );
+                        }
+                        if (snapshot.hasError) {
+                          return const Center(
+                            child: Text("Error loading services", style: TextStyle(color: Colors.white70)),
+                          );
+                        }
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Center(
+                            child: Text("No services available", style: TextStyle(color: Colors.white70)),
                           );
                         }
 
@@ -229,19 +244,15 @@ class HomeUI extends StatelessWidget {
 
                         return Column(
                           children: services.map((doc) {
-                            final data =
-                                doc.data() as Map<String, dynamic>;
+                            final data = doc.data() as Map<String, dynamic>;
 
                             return Container(
-                              margin:
-                                  const EdgeInsets.only(bottom: 10),
+                              margin: const EdgeInsets.only(bottom: 10),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: Colors.white10,
-                                borderRadius:
-                                    BorderRadius.circular(12),
-                                border: Border.all(
-                                    color: Colors.tealAccent),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.tealAccent),
                               ),
                               child: Row(
                                 children: [
@@ -252,26 +263,29 @@ class HomeUI extends StatelessWidget {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
+                                        // ✅ Service Type = name field
                                         Text(
-                                          data['serviceName'] ??
-                                              'Service',
+                                          data['name']?? 'Service',
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontWeight:
-                                                FontWeight.bold,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
                                           ),
                                         ),
-                                        Text(
-                                          data['description'] ??
-                                              '',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
-                                            fontSize: 12,
+                                        // ✅ Description only
+                                        if (data['description']!= null && data['description'].toString().isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 4),
+                                            child: Text(
+                                              data['description'],
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 12,
+                                              ),
+                                            ),
                                           ),
-                                        ),
                                       ],
                                     ),
                                   ),
@@ -292,8 +306,7 @@ class HomeUI extends StatelessWidget {
     );
   }
 
-  static Widget doctorCard(
-      String name, String service, String imageUrl) {
+  static Widget doctorCard(String name, String service, String imageUrl) {
     return Container(
       width: 160,
       margin: const EdgeInsets.only(right: 12),
@@ -308,18 +321,23 @@ class HomeUI extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 30,
-            backgroundImage:
-                imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
-            child: imageUrl.isEmpty
-                ? const Icon(Icons.person)
-                : null,
+            backgroundColor: Colors.teal.shade700,
+            backgroundImage: imageUrl.isNotEmpty? NetworkImage(imageUrl) : null,
+            child: imageUrl.isEmpty? const Icon(Icons.person, color: Colors.white) : null,
           ),
           const SizedBox(height: 10),
-          Text(name,
-              style: const TextStyle(color: Colors.white)),
-          Text(service,
-              style: const TextStyle(
-                  color: Colors.tealAccent, fontSize: 11)),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white),
+          ),
+          Text(
+            service,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.tealAccent, fontSize: 11),
+          ),
         ],
       ),
     );

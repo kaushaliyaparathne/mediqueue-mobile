@@ -168,7 +168,7 @@ class _HeartBeatLoaderState extends State<HeartBeatLoader>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
 
     _animation = Tween<double>(

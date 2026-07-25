@@ -300,7 +300,10 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
     );
 
     if (date != null) {
-      setState(() => selectedDate = date);
+      setState(() {
+        selectedDate = date;
+        selectedTime = null;
+      });
       await updateQueuePreview();
     }
   }
@@ -332,19 +335,50 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
       },
     );
 
-    if (time != null) {
-      if (!isDoctorAvailableAtTime(time)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Doctor only available ${doctorTimeSlots['start']} - ${doctorTimeSlots['end']}",
-            ),
+    if (time == null) return;
+
+    if (!isDoctorAvailableAtTime(time)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Doctor only available ${doctorTimeSlots['start']} - ${doctorTimeSlots['end']}",
           ),
+        ),
+      );
+      return;
+    }
+
+    final now = DateTime.now();
+    final isToday = selectedDate!.year == now.year &&
+        selectedDate!.month == now.month &&
+        selectedDate!.day == now.day;
+
+    if (isToday) {
+      final pickedDateTime = DateTime(
+        selectedDate!.year,
+        selectedDate!.month,
+        selectedDate!.day,
+        time.hour,
+        time.minute,
+      );
+      if (pickedDateTime.isBefore(now)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Please choose a time later than now")),
         );
         return;
       }
-      setState(() => selectedTime = time);
     }
+
+    final taken = await _isSlotTaken(selectedDate!, time);
+    if (!mounted) return;
+    if (taken) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("This time slot is already booked, please choose another")),
+      );
+      return;
+    }
+
+    setState(() => selectedTime = time);
   }
 
   Future<bool> alreadyBooked() async {
@@ -364,14 +398,11 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
     return snapshot.docs.isNotEmpty;
   }
 
-  Future<bool> isSlotBooked() async {
-    if (selectedDoctorId == null || selectedDate == null || selectedTime == null) {
-      return false;
-    }
+  Future<bool> _isSlotTaken(DateTime date, TimeOfDay time) async {
+    if (selectedDoctorId == null) return false;
 
-    final formattedDate =
-        "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}";
-    final formattedTime = selectedTime!.format(context);
+    final formattedDate = "${date.day}/${date.month}/${date.year}";
+    final formattedTime = time.format(context);
 
     final snapshot = await _firestore
         .collection("appointments")
@@ -382,6 +413,14 @@ class _BookAppointmentPageState extends State<BookAppointmentPage> {
         .get();
 
     return snapshot.docs.isNotEmpty;
+  }
+
+  Future<bool> isSlotBooked() async {
+    if (selectedDoctorId == null || selectedDate == null || selectedTime == null) {
+      return false;
+    }
+
+    return _isSlotTaken(selectedDate!, selectedTime!);
   }
 
   Future<void> bookAppointment() async {
