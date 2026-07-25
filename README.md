@@ -79,29 +79,23 @@ MediQueue follows a client-server architecture.
 
 # 📱 Screenshots
 
-## Splash Screen
 
-![Splash Screen](screenshots/splash.png)
-
-## Login Page
-
-![Login](lib/screenshorts/login.jpeg)
 
 ## Home Page
 
-![Home](screenshots/home.png)
+![Home](lib/screenshorts/home.jpeg)
 
 ## Book Appointment
 
-![Book Appointment](screenshots/book_appointment.png)
+![Book Appointment](lib/screenshorts/book_appointmnet.jpeg)
 
-## My Appointments
+## Queue Status
+![Queue Status](lib/screenshorts/queue_status.jpeg)
 
-![Appointments](screenshots/appointments.png)
 
-## Profile
 
-![Profile](screenshots/profile.png)
+
+
 
 ---
 
