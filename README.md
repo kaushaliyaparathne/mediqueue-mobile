@@ -85,7 +85,7 @@ MediQueue follows a client-server architecture.
 
 ## Login Page
 
-![Login](screenshots/login.jpeg)
+![Login](lib/screenshorts/login.jpeg)
 
 ## Home Page
 
